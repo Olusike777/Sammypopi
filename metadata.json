@@ -1,0 +1,6 @@
+{
+  "name": "Sammypopi — Multi-Agent AI Workspace",
+  "description": "An agent orchestration workspace where Sammypopi (the Maestro) coordinates specialized AI agents for research, visual curation, landing-page design, typography, and quality critique.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
