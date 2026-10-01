@@ -8,6 +8,7 @@ import { orchestrationEngine } from './src/services/orchestrationEngine';
 import { projectState } from './src/services/projectState';
 import { memoryService } from './src/services/memoryService';
 import { agentRegistry } from './src/services/agentRegistry';
+import { maestroConversation } from './src/services/maestroConversation';
 
 dotenv.config();
 
@@ -32,30 +33,60 @@ app.get('/api/status', (req: Request, res: Response) => {
   });
 });
 
-// Maestro Orchestration route
+// Maestro Primary Conversational Entry Point
+app.post('/api/chat', async (req: Request, res: Response) => {
+  try {
+    const { message, prompt, history = [], projectId = 'proj_apex_01', tool } = req.body;
+    const userMessage = message || prompt;
+
+    if (!userMessage || typeof userMessage !== 'string' || !userMessage.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const result = await maestroConversation.converse({
+      message: userMessage.trim(),
+      history,
+      projectId,
+      tool,
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Chat error:', error);
+    return res.status(500).json({ error: error.message || 'Chat conversation failed' });
+  }
+});
+
+// Maestro Orchestration route (backwards-compatible with conversation reasoning)
 app.post('/api/orchestrate', async (req: Request, res: Response) => {
   try {
-    const { prompt, projectId = 'proj_apex_01' } = req.body;
-    if (!prompt) {
+    const { prompt, message, history = [], projectId = 'proj_apex_01', tool } = req.body;
+    const userMessage = prompt || message;
+
+    if (!userMessage) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    const maestroTask = await agentRuntime.runAgentTask({
-      agentId: 'sammypopi',
-      taskId: `task_orch_${Date.now()}`,
+    const convResult = await maestroConversation.converse({
+      message: userMessage,
+      history,
       projectId,
-      objective: `Deconstruct user request: "${prompt}". Formulate delegation tasks across specialists and identify potential creative debate areas.`,
-      actionRequired: 'create',
-      scopeRequired: 'project:brief',
-      responseFormat: 'json',
+      tool,
     });
 
     return res.json({
-      source: `${maestroTask.provider}/${maestroTask.model}`,
-      orchestration: maestroTask.structuredOutput || {
-        summary: maestroTask.resultText,
-        delegatedTasks: [],
-        executiveMessage: maestroTask.resultText,
+      source: 'sammypopi/maestro',
+      intent: convResult.intent,
+      requiresTeam: convResult.requiresTeam,
+      requiresProjectMutation: convResult.requiresProjectMutation,
+      response: convResult.response,
+      nextAction: convResult.nextAction,
+      suggestedPrompts: convResult.suggestedPrompts,
+      orchestration: {
+        summary: convResult.delegationPlan?.summary || convResult.response,
+        delegatedTasks: convResult.delegationPlan?.delegatedTasks || [],
+        anticipatedDebate: convResult.delegationPlan?.anticipatedDebate,
+        executiveMessage: convResult.response,
       },
     });
   } catch (error: any) {

@@ -22,6 +22,8 @@ interface MaestroConsoleProps {
   isLoading: boolean;
   agents: Agent[];
   activeProject: Project;
+  onRunWorkflow?: () => void;
+  isWorkflowRunning?: boolean;
 }
 
 export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
@@ -30,6 +32,8 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
   isLoading,
   agents,
   activeProject,
+  onRunWorkflow,
+  isWorkflowRunning = false,
 }) => {
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -82,11 +86,30 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
   };
 
   const promptStarters = [
-    'Deconstruct project into specialist tasks',
-    'Audit wireframe for anti-slop compliance',
-    'Direct Samsmith to research luxury portfolio trends',
-    'Have Samuel review Samsonite’s contrast ratio',
+    'Hi Sammypopi, what makes you different from a standard chatbot?',
+    'Brainstorm 3 bold creative angles for our architectural portfolio',
+    'Explain our anti-slop design constitution & zero-pill rule',
+    'Assemble the specialists to build out our landing page',
   ];
+
+  const getIntentBadge = (intent?: string) => {
+    switch (intent) {
+      case 'greeting':
+        return { label: 'Maestro · Greeting', color: 'text-amber-400 bg-amber-950/30 border-amber-800/40' };
+      case 'question':
+        return { label: 'Maestro · Direct Answer', color: 'text-sky-400 bg-sky-950/30 border-sky-800/40' };
+      case 'brainstorming':
+        return { label: 'Maestro · Creative Brainstorm', color: 'text-purple-400 bg-purple-950/30 border-purple-800/40' };
+      case 'project_discussion':
+        return { label: 'Maestro · Strategy', color: 'text-indigo-400 bg-indigo-950/30 border-indigo-800/40' };
+      case 'create_landing_page':
+        return { label: 'Maestro · Team Orchestration', color: 'text-emerald-400 bg-emerald-950/30 border-emerald-800/40' };
+      case 'review_landing_page':
+        return { label: 'Maestro · Quality Audit', color: 'text-rose-400 bg-rose-950/30 border-rose-800/40' };
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="flex h-[calc(100vh-7.5rem)] flex-col rounded-xl border border-neutral-800 bg-neutral-950">
@@ -188,8 +211,26 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
                 />
               )}
 
-              <div className={`max-w-2xl space-y-3 ${isUser ? 'items-end' : 'items-start'}`}>
+              <div className={`max-w-2xl space-y-2.5 ${isUser ? 'items-end' : 'items-start'}`}>
                 
+                {/* Intent Tag (for Maestro) */}
+                {!isUser && message.intent && (() => {
+                  const badge = getIntentBadge(message.intent);
+                  if (!badge) return null;
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-mono border ${badge.color}`}>
+                        {badge.label}
+                      </span>
+                      {message.requiresTeam ? (
+                        <span className="text-[10px] font-mono text-emerald-400">· Specialists Engaged</span>
+                      ) : (
+                        <span className="text-[10px] font-mono text-neutral-500">· Direct Conversational</span>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Main bubble */}
                 <div
                   className={`rounded-xl px-4 py-3 text-xs leading-relaxed ${
@@ -201,12 +242,38 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
 
-                {/* Subtask Decomposition Tree (if orchestrated by Sammypopi) */}
-                {orchestration?.subtasksPlanned && orchestration.subtasksPlanned.length > 0 && (
+                {/* Suggested Prompts / Follow-up Chips */}
+                {!isUser && message.suggestedPrompts && message.suggestedPrompts.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {message.suggestedPrompts.map((promptText, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => onSendMessage(promptText)}
+                        className="rounded-full border border-neutral-800 bg-neutral-900/80 px-2.5 py-1 text-[11px] text-neutral-300 transition-colors hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-200 text-left"
+                      >
+                        {promptText}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Gated Subtask Decomposition Tree (ONLY when requiresTeam is true) */}
+                {message.requiresTeam && orchestration?.subtasksPlanned && orchestration.subtasksPlanned.length > 0 && (
                   <div className="rounded-lg border border-neutral-800/90 bg-neutral-900/60 p-3 text-xs space-y-2">
-                    <div className="flex items-center gap-1.5 text-neutral-300 font-medium">
-                      <Layers className="h-3.5 w-3.5 text-amber-400" />
-                      <span>Task Decomposition & Delegation Protocol:</span>
+                    <div className="flex items-center justify-between text-neutral-300 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Task Decomposition & Delegation Protocol:</span>
+                      </div>
+                      {onRunWorkflow && (
+                        <button
+                          onClick={onRunWorkflow}
+                          disabled={isWorkflowRunning}
+                          className="flex items-center gap-1 rounded bg-amber-400 px-2 py-0.5 text-[10px] font-semibold text-neutral-950 hover:bg-amber-300 disabled:opacity-50"
+                        >
+                          {isWorkflowRunning ? 'Sprint in Progress...' : 'Run Team Workflow'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 pt-1">
@@ -277,7 +344,7 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
             />
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-xs text-neutral-400 flex items-center gap-2">
               <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-spin" />
-              <span>Sammypopi is synthesizing with specialized agents...</span>
+              <span>Sammypopi is reasoning...</span>
             </div>
           </div>
         )}
@@ -333,7 +400,7 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
                 }
               }}
               rows={2}
-              placeholder="Instruct Sammypopi (e.g. 'Synthesize a landing page for our boutique studio with unboxed metadata...')"
+              placeholder="Talk to Maestro, brainstorm, ask questions, or direct the atelier team (e.g. 'Hi Maestro', 'What makes our portfolio unique?', 'Build the hero section')..."
               className="w-full resize-none rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 focus:border-amber-500/60 focus:outline-none"
             />
           </div>
@@ -377,8 +444,8 @@ export const MaestroConsole: React.FC<MaestroConsoleProps> = ({
         </form>
 
         <div className="mt-2 flex items-center justify-between text-[11px] text-neutral-400">
-          <span>Maestro coordinates specialists directly · Enter to send</span>
-          <span className="font-mono text-neutral-400">Model: gemini-3.8-flash</span>
+          <span>Conversational AI first · Specialists engaged only for project tasks · Shift+Enter for newline</span>
+          <span className="font-mono text-neutral-400">Maestro: Live Reasoning</span>
         </div>
       </div>
 

@@ -43,18 +43,18 @@ export default function App() {
       sender: 'sammypopi',
       content: `Welcome to the atelier, Alamu. I am Sammypopi, your Maestro.
 
-My multi-provider specialist team is active:
-• Samsmith (Gemini Research & UX Intelligence)
-• Samkindle (Visual Asset & Palette Curation)
-• Samsonite (Anthropic/OpenAI Landing-Page Designer)
-• Sammy (Typography & Polish Specialist)
-• Samuel (Uncompromising QC Critic)
+I'm your primary conversational AI partner and orchestrator. We can converse naturally, brainstorm creative angles, answer questions about design systems and typography, or assemble our specialist team whenever you want to build or audit a landing page.
 
-How shall we direct the atelier today? You can instruct me in natural language or click "Run Pipeline" to trigger the autonomous multi-agent sprint.`,
+What would you like to explore today?`,
       timestamp: new Date().toISOString(),
-      orchestrationData: {
-        delegatedTo: ['samsmith', 'samkindle', 'samsonite', 'sammy', 'samuel'],
-      },
+      intent: 'greeting',
+      requiresTeam: false,
+      suggestedPrompts: [
+        'What makes this atelier different from a chatbot?',
+        'Brainstorm ideas for Apex Studio’s portfolio',
+        'Explain our anti-slop rules & zero-pill discipline',
+        'Assemble the team to build our landing page',
+      ],
     },
   ]);
 
@@ -86,48 +86,60 @@ How shall we direct the atelier today? You can instruct me in natural language o
     setMessages(prev => [...prev, userMsg]);
     setIsAiResponding(true);
 
-    // Set Sammypopi status to working
+    // Set Sammypopi status to working (Maestro is reasoning)
     setAgents(prev => prev.map(a => a.isMaestro ? { ...a, status: 'working' } : a));
 
+    // Construct conversation history for context (last 8 messages)
+    const recentHistory = messages.slice(-8).map(m => ({
+      role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+    }));
+
     try {
-      const response = await fetch('/api/orchestrate', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: content,
+          message: content,
+          history: recentHistory,
           projectId: activeProject.id,
+          tool: options?.tool,
         }),
       });
 
       const data = await response.json();
-      const orch = data.orchestration || {};
 
       const maestroReply: ChatMessage = {
         id: `msg_m_${Date.now()}`,
         sender: 'sammypopi',
-        content: orch.executiveMessage || orch.summary || 'I have aligned the team and assigned tasks across the workspace.',
+        content: data.response || "I'm here with you. What direction shall we explore?",
         timestamp: new Date().toISOString(),
-        orchestrationData: {
-          subtasksPlanned: orch.delegatedTasks?.map((t: any) => ({
+        intent: data.intent,
+        requiresTeam: data.requiresTeam,
+        requiresProjectMutation: data.requiresProjectMutation,
+        nextAction: data.nextAction,
+        suggestedPrompts: data.suggestedPrompts,
+        orchestrationData: data.requiresTeam && data.delegationPlan ? {
+          subtasksPlanned: data.delegationPlan.delegatedTasks?.map((t: any) => ({
             agentId: t.agentId,
             task: t.taskTitle || t.description,
           })) || [],
-          delegatedTo: orch.delegatedTasks?.map((t: any) => t.agentId) || [],
+          delegatedTo: data.delegationPlan.delegatedTasks?.map((t: any) => t.agentId) || [],
           critiqueInvolved: true,
           synthesisReady: true,
-        },
+        } : undefined,
       };
 
       setMessages(prev => [...prev, maestroReply]);
 
-      // Add inter-agent discussion based on debate
-      if (orch.anticipatedDebate) {
+      // Add inter-agent discussion based on debate ONLY if requiresTeam is true
+      if (data.requiresTeam && data.delegationPlan?.anticipatedDebate) {
         const debateMsg: AgentDiscussionMessage = {
           id: `disc_${Date.now()}`,
           projectId: activeProject.id,
           senderAgentId: 'samuel',
           recipientAgentId: 'samsonite',
-          content: orch.anticipatedDebate,
+          content: data.delegationPlan.anticipatedDebate,
           type: 'critique',
           timestamp: new Date().toISOString(),
         };
@@ -138,12 +150,19 @@ How shall we direct the atelier today? You can instruct me in natural language o
         }));
       }
 
+      // If team execution is explicitly requested by user or Maestro, trigger workflow
+      if (data.requiresTeam && data.nextAction === 'start_landing_page_workflow') {
+        handleRunWorkflow(content);
+      }
+
     } catch (err) {
       const fallbackReply: ChatMessage = {
         id: `msg_m_${Date.now()}`,
         sender: 'sammypopi',
-        content: `I have received your directive: "${content}". I am coordinating with Samsmith, Samkindle, and Samsonite to refine the atelier architecture. Samuel is standing by for independent review.`,
+        content: "I'm here with you. What direction shall we explore?",
         timestamp: new Date().toISOString(),
+        intent: 'casual_conversation',
+        requiresTeam: false,
       };
       setMessages(prev => [...prev, fallbackReply]);
     } finally {
@@ -153,7 +172,7 @@ How shall we direct the atelier today? You can instruct me in natural language o
   };
 
   // Section 10 & 14: Real multi-agent workflow execution via backend /api/runs
-  const handleRunWorkflow = async () => {
+  const handleRunWorkflow = async (customPrompt?: string) => {
     if (isWorkflowRunning) return;
     setIsWorkflowRunning(true);
     setRuntimeEvents([]);
@@ -167,7 +186,7 @@ How shall we direct the atelier today? You can instruct me in natural language o
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: activeProject.id,
-          prompt: 'Execute full architectural atelier sprint for Apex Studio: research, assets, wireframe, typography, and strict QC critique.',
+          prompt: customPrompt || 'Execute full architectural atelier sprint for Apex Studio: research, assets, wireframe, typography, and strict QC critique.',
         }),
       });
 
@@ -297,6 +316,8 @@ How shall we direct the atelier today? You can instruct me in natural language o
             isLoading={isAiResponding}
             agents={agents}
             activeProject={activeProject}
+            onRunWorkflow={() => handleRunWorkflow()}
+            isWorkflowRunning={isWorkflowRunning}
           />
         )}
 

@@ -313,11 +313,46 @@ export interface UserProfile {
   };
 }
 
+export type MaestroIntent = 
+  | 'casual_conversation'
+  | 'greeting'
+  | 'question'
+  | 'brainstorming'
+  | 'project_discussion'
+  | 'requirements_clarification'
+  | 'create_landing_page'
+  | 'modify_landing_page'
+  | 'review_landing_page'
+  | 'other_action';
+
+export interface MaestroConversationResult {
+  intent: MaestroIntent;
+  requiresTeam: boolean;
+  requiresProjectMutation: boolean;
+  response: string;
+  nextAction: string | null;
+  suggestedPrompts?: string[];
+  delegationPlan?: {
+    summary: string;
+    delegatedTasks: Array<{
+      agentId: string;
+      taskTitle: string;
+      priority: 'low' | 'medium' | 'high' | 'critical';
+    }>;
+    anticipatedDebate?: string;
+  };
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'sammypopi' | 'system';
   content: string;
   timestamp: string;
+  intent?: MaestroIntent;
+  requiresTeam?: boolean;
+  requiresProjectMutation?: boolean;
+  nextAction?: string | null;
+  suggestedPrompts?: string[];
   orchestrationData?: {
     subtasksPlanned?: Array<{ agentId: string; task: string }>;
     delegatedTo?: string[];
