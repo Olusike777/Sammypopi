@@ -8,9 +8,10 @@ import {
   MessageSquare,
   ShieldAlert,
   ArrowRight,
-  Eye
+  Eye,
+  Cpu
 } from 'lucide-react';
-import { Agent, Project, AgentDiscussionMessage } from '../types/orchestration';
+import { Agent, Project, OrchestrationEvent } from '../types/orchestration';
 
 interface AgentRoomProps {
   agents: Agent[];
@@ -19,6 +20,7 @@ interface AgentRoomProps {
   onSendMessageToAgent: (senderId: string, recipientId: string, message: string) => void;
   onRunWorkflowStage: (stage: string) => void;
   isWorkflowRunning: boolean;
+  runtimeEvents?: OrchestrationEvent[];
 }
 
 export const AgentRoom: React.FC<AgentRoomProps> = ({
@@ -28,21 +30,16 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
   onSendMessageToAgent,
   onRunWorkflowStage,
   isWorkflowRunning,
+  runtimeEvents = [],
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<string>('sammypopi');
   const [interAgentInput, setInterAgentInput] = useState('');
   const [targetAgentId, setTargetAgentId] = useState('samsonite');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'critique' | 'proposals'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'events' | 'discussions'>('all');
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId) || agents[0];
   const maestro = agents.find(a => a.isMaestro) || agents[0];
   const specialists = agents.filter(a => !a.isMaestro);
-
-  const filteredDiscussions = activeProject.discussions.filter(disc => {
-    if (activeFilter === 'critique') return disc.type === 'critique' || disc.type === 'disagreement';
-    if (activeFilter === 'proposals') return disc.type === 'proposal' || disc.type === 'directive';
-    return true;
-  });
 
   const handleSendDiscussion = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,17 +78,17 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
               Active Workflow Pipeline · {activeProject.name.split('—')[0]}
             </div>
             <h2 className="text-sm font-semibold text-neutral-200">
-              Collaborative Atelier Room
+              Multi-Provider AI Atelier Room
             </h2>
           </div>
           <div className="text-xs text-neutral-400 font-mono">
-            Stage: <span className="text-amber-400 font-medium">{activeProject.workflowStage}</span>
+            Active Stage: <span className="text-amber-400 font-medium">{activeProject.workflowStage}</span>
           </div>
         </div>
 
         {/* Workflow Steps Horizontal Bar */}
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          {stages.map((st, i) => {
+          {stages.map((st) => {
             const isCurrent = activeProject.workflowStage === st.id;
             return (
               <button
@@ -150,10 +147,17 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
                   <p className="mt-1 max-w-xl text-xs text-neutral-400 leading-relaxed">
                     {maestro.tagline}
                   </p>
-                  <div className="mt-2 flex items-center gap-3 text-xs text-neutral-400">
-                    <span>Delegated: {activeProject.tasks.length} tasks</span>
-                    <span>·</span>
-                    <span>Directing: {specialists.length} specialists</span>
+                  
+                  {/* Runtime Provider & Model pill */}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 font-mono text-[11px] text-amber-300 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-800/40">
+                      <Cpu className="h-3 w-3" />
+                      Primary: {maestro.modelPolicy?.primary?.provider.toUpperCase()} ({maestro.modelPolicy?.primary?.model})
+                    </span>
+                    <span className="text-neutral-500">·</span>
+                    <span className="text-neutral-400 text-[11px]">
+                      Delegated: {activeProject.tasks.length} tasks
+                    </span>
                   </div>
                 </div>
               </div>
@@ -212,8 +216,16 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
                     </div>
                   </div>
 
+                  {/* Section 25 & 26: Provider & Model details */}
+                  <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono text-neutral-400 border-t border-neutral-800/60 pt-2">
+                    <span>Provider:</span>
+                    <span className="text-neutral-300 font-semibold uppercase">
+                      {agent.activeProvider || agent.modelPolicy?.primary?.provider}
+                    </span>
+                  </div>
+
                   {/* Current Active Task or Last Deliverable */}
-                  <div className="mt-3 rounded-lg border border-neutral-800/60 bg-neutral-950/60 p-2 text-[11px]">
+                  <div className="mt-2 rounded-lg border border-neutral-800/60 bg-neutral-950/60 p-2 text-[11px]">
                     <div className="text-[10px] text-neutral-400">Current Task:</div>
                     <div className="truncate font-medium text-neutral-300">
                       {currentTask ? currentTask.title : 'Ready for assignment'}
@@ -254,24 +266,22 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <div className="text-[11px] font-medium text-neutral-400">Core Priorities</div>
-                <ul className="mt-1.5 space-y-1 text-xs text-neutral-300">
-                  {selectedAgent.personality.priorities.slice(0, 3).map((p, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <span className="text-amber-400">·</span>
-                      <span>{p}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="text-[11px] font-medium text-neutral-400">Model Policy</div>
+                <div className="mt-1.5 space-y-1 font-mono text-[11px] text-neutral-300">
+                  <div>Primary: <span className="text-amber-400">{selectedAgent.modelPolicy?.primary?.provider}</span> ({selectedAgent.modelPolicy?.primary?.model})</div>
+                  <div className="text-neutral-500 text-[10px]">
+                    Fallback: {selectedAgent.modelPolicy?.fallback?.map(f => f.provider).join(' → ') || 'system'}
+                  </div>
+                </div>
               </div>
 
               <div>
-                <div className="text-[11px] font-medium text-neutral-400">Specialist Strengths</div>
+                <div className="text-[11px] font-medium text-neutral-400">Specialist Priorities</div>
                 <ul className="mt-1.5 space-y-1 text-xs text-neutral-300">
-                  {selectedAgent.personality.strengths.slice(0, 3).map((s, i) => (
+                  {selectedAgent.personality.priorities.slice(0, 2).map((p, i) => (
                     <li key={i} className="flex items-start gap-1.5">
                       <span className="text-emerald-400">·</span>
-                      <span>{s}</span>
+                      <span>{p}</span>
                     </li>
                   ))}
                 </ul>
@@ -291,14 +301,14 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Agent-to-Agent Discussion Feed (4 cols) */}
+        {/* Right Column: Live Event Stream & Inter-Agent Discussions (4 cols) */}
         <div className="space-y-4 lg:col-span-4">
           <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/60 p-4">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-amber-400" />
                 <h3 className="text-xs font-semibold text-neutral-200">
-                  Agent-to-Agent Stream
+                  Live Runtime Stream
                 </h3>
               </div>
 
@@ -313,19 +323,43 @@ export const AgentRoom: React.FC<AgentRoomProps> = ({
                   All
                 </button>
                 <button
-                  onClick={() => setActiveFilter('critique')}
+                  onClick={() => setActiveFilter('events')}
                   className={`px-2 py-0.5 rounded transition-colors ${
-                    activeFilter === 'critique' ? 'bg-neutral-800 text-rose-300' : 'text-neutral-400 hover:text-neutral-300'
+                    activeFilter === 'events' ? 'bg-neutral-800 text-amber-300' : 'text-neutral-400 hover:text-neutral-300'
                   }`}
                 >
-                  Critique
+                  Events
                 </button>
               </div>
             </div>
 
-            {/* Live Message Thread */}
+            {/* Live Message & Event Stream */}
             <div className="mt-3 max-h-[460px] space-y-3 overflow-y-auto pr-1">
-              {filteredDiscussions.map(disc => {
+              
+              {/* Show runtime events if any */}
+              {runtimeEvents.map(ev => (
+                <div
+                  key={ev.id}
+                  className={`rounded-lg border p-2.5 text-xs transition-colors ${
+                    ev.type === 'revision_requested' ? 'border-rose-900/50 bg-rose-950/20 text-rose-200' :
+                    ev.type === 'approval_received' ? 'border-emerald-900/50 bg-emerald-950/20 text-emerald-200' :
+                    ev.type === 'provider_fallback' ? 'border-amber-900/50 bg-amber-950/20 text-amber-200' :
+                    'border-neutral-800 bg-neutral-950/80 text-neutral-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
+                    <span className="uppercase font-semibold">{ev.type.replace('_', ' ')}</span>
+                    {ev.provider && <span>{ev.provider}</span>}
+                  </div>
+                  <p className="mt-1 leading-relaxed">{ev.message}</p>
+                  <div className="mt-1 text-[9px] text-neutral-500 font-mono text-right">
+                    {new Date(ev.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
+              ))}
+
+              {/* Show project discussions */}
+              {activeFilter !== 'events' && activeProject.discussions.map(disc => {
                 const sender = agents.find(a => a.id === disc.senderAgentId);
                 const recipient = disc.recipientAgentId ? agents.find(a => a.id === disc.recipientAgentId) : null;
                 const isCritique = disc.type === 'critique' || disc.type === 'disagreement';

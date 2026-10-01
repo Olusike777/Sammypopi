@@ -9,7 +9,8 @@ import {
   AlertCircle, 
   Eye, 
   Sparkles,
-  ArrowUpRight
+  ArrowUpRight,
+  Cpu
 } from 'lucide-react';
 import { Agent, AgentTask } from '../types/orchestration';
 
@@ -25,7 +26,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
   onDispatchTask,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'personality' | 'permissions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'personality' | 'permissions' | 'modelPolicy'>('overview');
 
   const getStatusBadge = (status: Agent['status']) => {
     switch (status) {
@@ -106,8 +107,17 @@ export const AgentCard: React.FC<AgentCardProps> = ({
           {agent.tagline}
         </p>
 
+        {/* Section 25 & 26: Configured Model Policy Indicator */}
+        <div className="mt-3 flex items-center justify-between rounded-md border border-neutral-800 bg-neutral-950/80 px-2.5 py-1 text-[11px] font-mono">
+          <span className="text-neutral-500">Provider:</span>
+          <span className="text-amber-300 font-semibold uppercase flex items-center gap-1">
+            <Cpu className="h-3 w-3" />
+            {agent.activeProvider || agent.modelPolicy?.primary?.provider} ({agent.activeModel || agent.modelPolicy?.primary?.model})
+          </span>
+        </div>
+
         {/* Current Task Box */}
-        <div className="mt-4 rounded-lg border border-neutral-800/80 bg-neutral-950/70 p-3">
+        <div className="mt-3 rounded-lg border border-neutral-800/80 bg-neutral-950/70 p-3">
           <div className="text-[11px] text-neutral-400">Current Task:</div>
           <div className="mt-1 text-xs font-medium text-neutral-200 truncate">
             {currentTask ? currentTask.title : 'Awaiting task delegation from Maestro'}
@@ -120,22 +130,22 @@ export const AgentCard: React.FC<AgentCardProps> = ({
           )}
         </div>
 
-        {/* Last Result Preview */}
-        {currentTask?.deliverable && (
-          <div className="mt-2 text-[11px] text-neutral-400 truncate">
-            <span className="text-neutral-500">Last Deliverable:</span> {currentTask.deliverable.title}
-          </div>
-        )}
-
         {/* Expanded Details Tabs */}
         {isExpanded && (
           <div className="mt-4 border-t border-neutral-800/80 pt-3">
-            <div className="flex gap-2 border-b border-neutral-800/60 pb-2 text-xs">
+            <div className="flex flex-wrap gap-2 border-b border-neutral-800/60 pb-2 text-xs">
               <button
                 onClick={() => setActiveTab('overview')}
                 className={`transition-colors ${activeTab === 'overview' ? 'text-amber-400 font-semibold' : 'text-neutral-400'}`}
               >
                 Overview
+              </button>
+              <span className="text-neutral-600">·</span>
+              <button
+                onClick={() => setActiveTab('modelPolicy')}
+                className={`transition-colors ${activeTab === 'modelPolicy' ? 'text-amber-400 font-semibold' : 'text-neutral-400'}`}
+              >
+                Model Policy
               </button>
               <span className="text-neutral-600">·</span>
               <button
@@ -169,6 +179,22 @@ export const AgentCard: React.FC<AgentCardProps> = ({
               </div>
             )}
 
+            {/* Tab: Model Policy */}
+            {activeTab === 'modelPolicy' && (
+              <div className="mt-3 space-y-2 text-xs">
+                <div className="rounded border border-neutral-800 bg-neutral-950 p-2 font-mono text-[11px] space-y-1">
+                  <div>Primary Provider: <span className="text-amber-400 uppercase font-semibold">{agent.modelPolicy?.primary?.provider}</span></div>
+                  <div>Primary Model: <span className="text-neutral-200">{agent.modelPolicy?.primary?.model}</span></div>
+                  <div className="text-neutral-500 pt-1 border-t border-neutral-900">
+                    Fallbacks: {agent.modelPolicy?.fallback?.map(f => `${f.provider} (${f.model})`).join(' → ') || 'system'}
+                  </div>
+                  <div className="text-neutral-500">
+                    Timeout: {agent.modelPolicy?.timeoutMs || 40000}ms
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Tab: Personality */}
             {activeTab === 'personality' && (
               <div className="mt-3 space-y-2.5 text-xs">
@@ -187,17 +213,6 @@ export const AgentCard: React.FC<AgentCardProps> = ({
                       </li>
                     ))}
                   </ul>
-                </div>
-
-                <div>
-                  <span className="text-[11px] text-neutral-400">Relationship to Peers:</span>
-                  <div className="mt-1 space-y-1 text-[10px] text-neutral-400">
-                    {Object.entries(agent.personality.relationshipToOthers).slice(0, 2).map(([peer, rel]) => (
-                      <div key={peer}>
-                        <span className="font-semibold text-neutral-300 capitalize">{peer}:</span> {rel}
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}

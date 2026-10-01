@@ -57,6 +57,11 @@ export const NewAgentModal: React.FC<NewAgentModalProps> = ({
         execute: [],
       },
       assignedTools: selectedTools,
+      modelPolicy: {
+        primary: { provider: 'openai', model: 'gpt-4o' },
+        fallback: [{ provider: 'gemini', model: 'gemini-3.8-flash' }],
+        requiredCapabilities: ['text', 'structured_output'],
+      },
     };
 
     onAddAgent(newAgent);

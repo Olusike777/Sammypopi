@@ -15,7 +15,8 @@ import {
   MemoryItem, 
   UserProfile, 
   ChatMessage, 
-  AgentDiscussionMessage 
+  AgentDiscussionMessage,
+  OrchestrationEvent 
 } from './types/orchestration';
 import { INITIAL_AGENTS, agentRegistry } from './services/agentRegistry';
 import { INITIAL_PROJECT, INITIAL_MEMORIES, INITIAL_USER_PROFILE } from './services/mockProjectData';
@@ -29,6 +30,7 @@ export default function App() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
   const [isAiResponding, setIsAiResponding] = useState(false);
+  const [runtimeEvents, setRuntimeEvents] = useState<OrchestrationEvent[]>([]);
 
   // Modals
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -41,9 +43,14 @@ export default function App() {
       sender: 'sammypopi',
       content: `Welcome to the atelier, Alamu. I am Sammypopi, your Maestro.
 
-My specialist team is aligned and ready: Samsmith is on research, Samkindle on visual asset curation, Samsonite on architectural layouts, Sammy on typography polish, and Samuel on rigorous quality critique.
+My multi-provider specialist team is active:
+• Samsmith (Gemini Research & UX Intelligence)
+• Samkindle (Visual Asset & Palette Curation)
+• Samsonite (Anthropic/OpenAI Landing-Page Designer)
+• Sammy (Typography & Polish Specialist)
+• Samuel (Uncompromising QC Critic)
 
-How shall we direct the team today? We can orchestrate a full landing-page sprint, audit wireframes against our design constitution, or research market benchmarks.`,
+How shall we direct the atelier today? You can instruct me in natural language or click "Run Pipeline" to trigger the autonomous multi-agent sprint.`,
       timestamp: new Date().toISOString(),
       orchestrationData: {
         delegatedTo: ['samsmith', 'samkindle', 'samsonite', 'sammy', 'samuel'],
@@ -56,7 +63,7 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
     fetch('/api/status')
       .then(res => res.json())
       .then(data => {
-        if (data.hasApiKey) {
+        if (data.providers?.gemini?.available || data.providers?.openai?.available || data.providers?.anthropic?.available) {
           setHasApiKey(true);
         }
       })
@@ -89,12 +96,6 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
         body: JSON.stringify({
           prompt: content,
           projectId: activeProject.id,
-          context: {
-            projectName: activeProject.name,
-            objective: activeProject.objective,
-            userPreferences: userProfile.preferences,
-            toolRequested: options?.tool,
-          },
         }),
       });
 
@@ -151,57 +152,58 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
     }
   };
 
-  // Run the multi-agent workflow sequence
+  // Section 10 & 14: Real multi-agent workflow execution via backend /api/runs
   const handleRunWorkflow = async () => {
     if (isWorkflowRunning) return;
     setIsWorkflowRunning(true);
+    setRuntimeEvents([]);
 
-    const stages: Array<{ stage: Project['workflowStage']; agentId: string; log: string }> = [
-      { stage: 'research', agentId: 'samsmith', log: 'Samsmith researching high-end UX benchmarks...' },
-      { stage: 'visual_curation', agentId: 'samkindle', log: 'Samkindle curating 60-30-10 travertine palette & assets...' },
-      { stage: 'design_architecture', agentId: 'samsonite', log: 'Samsonite synthesizing 1440px wireframe Bento grid...' },
-      { stage: 'typography_polish', agentId: 'sammy', log: 'Sammy enforcing 2+1 font rule & tabular numerals...' },
-      { stage: 'quality_control', agentId: 'samuel', log: 'Samuel conducting anti-slop audit & WCAG AA check...' },
-      { stage: 'maestro_synthesis', agentId: 'sammypopi', log: 'Sammypopi synthesizing final verified deliverable...' },
-    ];
+    // Mark maestro active
+    setAgents(prev => prev.map(a => a.isMaestro ? { ...a, status: 'working' } : a));
 
-    for (const step of stages) {
-      // Set active stage in project
-      setActiveProject(prev => ({ ...prev, workflowStage: step.stage }));
+    try {
+      const res = await fetch('/api/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: activeProject.id,
+          prompt: 'Execute full architectural atelier sprint for Apex Studio: research, assets, wireframe, typography, and strict QC critique.',
+        }),
+      });
 
-      // Set agent working
-      setAgents(prev => prev.map(a => a.id === step.agentId ? { ...a, status: 'working' } : a));
+      const summary = await res.json();
+      const events: OrchestrationEvent[] = summary.events || [];
+      setRuntimeEvents(events);
 
-      // Wait 800ms per stage for smooth visual orchestration feedback
-      await new Promise(res => setTimeout(res, 850));
+      // Reflect final state
+      setActiveProject(prev => ({
+        ...prev,
+        workflowStage: 'final_ready',
+        status: summary.status === 'completed' ? 'completed' : 'review',
+      }));
 
-      // Mark agent completed
-      setAgents(prev => prev.map(a => a.id === step.agentId ? { ...a, status: 'completed' } : a));
-    }
+      // Update agents list with updated statuses & models
+      setAgents(agentRegistry.getAllAgents().map(a => ({ ...a, status: 'idle' })));
 
-    setActiveProject(prev => ({
-      ...prev,
-      workflowStage: 'final_ready',
-      status: 'completed',
-    }));
-
-    // Reset agents to idle
-    setAgents(prev => prev.map(a => ({ ...a, status: 'idle' })));
-    setIsWorkflowRunning(false);
-
-    // Notify in chat
-    setMessages(prev => [
-      ...prev,
-      {
-        id: `msg_wf_${Date.now()}`,
-        sender: 'sammypopi',
-        content: `Multi-agent sprint completed successfully! All 6 specialists have contributed: Samsmith’s research, Samkindle’s visual tokens, Samsonite’s layout, Sammy’s typography, and Samuel’s QC audit. The live landing page preview is now updated.`,
-        timestamp: new Date().toISOString(),
-        orchestrationData: {
-          synthesisReady: true,
+      // Add completion message from Maestro to chat
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `msg_wf_${Date.now()}`,
+          sender: 'sammypopi',
+          content: summary.finalSynthesis || `Autonomous workflow completed with ${summary.revisionLoopsCount} revision iterations. Deliverable verified and ready for review.`,
+          timestamp: new Date().toISOString(),
+          orchestrationData: {
+            synthesisReady: true,
+          },
         },
-      },
-    ]);
+      ]);
+    } catch (err) {
+      console.error('Failed to run workflow:', err);
+    } finally {
+      setIsWorkflowRunning(false);
+      setAgents(prev => prev.map(a => ({ ...a, status: 'idle' })));
+    }
   };
 
   const handleRunWorkflowStage = (stage: string) => {
@@ -230,14 +232,24 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
   };
 
   // Add new memory
-  const handleAddMemory = (memoryData: Omit<MemoryItem, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newMem: MemoryItem = {
-      ...memoryData,
-      id: `mem_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setMemories(prev => [newMem, ...prev]);
+  const handleAddMemory = async (memoryData: Omit<MemoryItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const res = await fetch('/api/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(memoryData),
+      });
+      const saved = await res.json();
+      setMemories(prev => [saved, ...prev]);
+    } catch {
+      const fallbackMem: MemoryItem = {
+        ...memoryData,
+        id: `mem_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setMemories(prev => [fallbackMem, ...prev]);
+    }
   };
 
   // Add new agent
@@ -249,7 +261,7 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-amber-500/20 selection:text-amber-200">
       
-      {/* Top Bar Contract adhering to Section 2 */}
+      {/* Top Bar Contract */}
       <TopNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -268,12 +280,13 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
           <AgentRoom
             agents={agents}
             activeProject={activeProject}
-            onSelectAgent={(agentId) => {
+            onSelectAgent={() => {
               setActiveTab('agents');
             }}
             onSendMessageToAgent={handleSendMessageToAgent}
             onRunWorkflowStage={handleRunWorkflowStage}
             isWorkflowRunning={isWorkflowRunning}
+            runtimeEvents={runtimeEvents}
           />
         )}
 
@@ -301,7 +314,7 @@ How shall we direct the team today? We can orchestrate a full landing-page sprin
             agents={agents}
             activeProject={activeProject}
             onOpenNewAgentModal={() => setNewAgentModalOpen(true)}
-            onDispatchTask={(agentId) => {
+            onDispatchTask={() => {
               setActiveTab('maestro');
             }}
           />

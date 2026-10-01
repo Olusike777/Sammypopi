@@ -1,6 +1,4 @@
-/**
- * Core type definitions for Sammypopi Multi-Agent Workspace
- */
+import { ModelPolicy, AIProviderId } from '../services/providers/providerTypes';
 
 export type AgentStatus = 'idle' | 'working' | 'waiting' | 'reviewing' | 'completed' | 'error';
 
@@ -65,6 +63,9 @@ export interface Agent {
   personality: AgentPersonality;
   permissions: AgentPermissions;
   assignedTools: string[]; // Tool IDs
+  modelPolicy: ModelPolicy; // Real multi-provider policy
+  activeProvider?: AIProviderId;
+  activeModel?: string;
   currentTaskId?: string;
   lastResult?: TaskResult;
   completedTasksCount: number;
@@ -136,6 +137,44 @@ export interface AgentDiscussionMessage {
   type: 'proposal' | 'critique' | 'agreement' | 'disagreement' | 'directive' | 'inquiry';
   timestamp: string;
   relatedTaskId?: string;
+}
+
+/**
+ * Section 11: Structured Agent Message Protocol
+ */
+export interface AgentMessage {
+  id: string;
+  from: string;
+  to: string;
+  type:
+    | 'task'
+    | 'result'
+    | 'question'
+    | 'review'
+    | 'revision_request'
+    | 'approval'
+    | 'status'
+    | 'handoff';
+  priority: 'low' | 'normal' | 'high' | 'critical';
+  projectId: string;
+  taskId: string;
+  objective: string;
+  input?: unknown;
+  context?: unknown;
+  evidence?: unknown;
+  requestedAction?: string;
+  output?: unknown;
+  status:
+    | 'pending'
+    | 'working'
+    | 'completed'
+    | 'failed'
+    | 'blocked'
+    | 'revision_required'
+    | 'approved';
+  revisionNumber?: number;
+  createdAt: string;
+  completedAt?: string;
 }
 
 export interface ProjectAsset {
@@ -285,4 +324,35 @@ export interface ChatMessage {
     critiqueInvolved?: boolean;
     synthesisReady?: boolean;
   };
+}
+
+/**
+ * Section 14: Real Event Stream definitions
+ */
+export type OrchestrationEventType = 
+  | 'workflow_started'
+  | 'task_created'
+  | 'agent_started'
+  | 'agent_message'
+  | 'agent_completed'
+  | 'review_started'
+  | 'revision_requested'
+  | 'revision_started'
+  | 'approval_received'
+  | 'provider_fallback'
+  | 'task_failed'
+  | 'workflow_completed'
+  | 'workflow_cancelled';
+
+export interface OrchestrationEvent {
+  id: string;
+  runId: string;
+  type: OrchestrationEventType;
+  agentId?: string;
+  taskId?: string;
+  provider?: string;
+  model?: string;
+  message: string;
+  payload?: unknown;
+  timestamp: string;
 }

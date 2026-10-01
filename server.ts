@@ -2,7 +2,12 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
+import { modelRouter } from './src/services/modelRouter';
+import { agentRuntime } from './src/services/agentRuntime';
+import { orchestrationEngine } from './src/services/orchestrationEngine';
+import { projectState } from './src/services/projectState';
+import { memoryService } from './src/services/memoryService';
+import { agentRegistry } from './src/services/agentRegistry';
 
 dotenv.config();
 
@@ -14,187 +19,124 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 
 app.use(express.json());
 
-// Initialize GoogleGenAI server-side with telemetry user agent
-const apiKey = process.env.GEMINI_API_KEY;
-let aiClient: GoogleGenAI | null = null;
-
-if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
-  aiClient = new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-}
-
-// Health & Status endpoint
+// Multi-provider status endpoint
 app.get('/api/status', (req: Request, res: Response) => {
+  const providerStatus = modelRouter.getProviderStatus();
   res.json({
     status: 'online',
     appName: 'Sammypopi — Multi-Agent AI Workspace',
     orchestrator: 'Sammypopi (Maestro)',
-    model: 'gemini-3.8-flash',
-    hasApiKey: !!aiClient,
-    environment: process.env.NODE_ENV || 'development',
+    primaryProvider: 'OpenAI (default)',
+    providers: providerStatus,
     timestamp: new Date().toISOString(),
   });
 });
 
-// Orchestrate request with Sammypopi (Maestro)
+// Maestro Orchestration route
 app.post('/api/orchestrate', async (req: Request, res: Response) => {
   try {
-    const { prompt, projectId, context } = req.body;
-
+    const { prompt, projectId = 'proj_apex_01' } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    const maestroSystemPrompt = `You are Sammypopi (the Maestro), the executive orchestrator of a multi-agent AI workspace.
-Your team includes:
-- Samsmith: Research & UX Intelligence Specialist
-- Samkindle: Visual Research & Image Asset Specialist
-- Samsonite: Landing-Page & Portfolio Designer
-- Sammy: Typography & Visual-Polish Specialist
-- Samuel: Quality Control, Critic & Anti-Slop Specialist
+    const maestroTask = await agentRuntime.runAgentTask({
+      agentId: 'sammypopi',
+      taskId: `task_orch_${Date.now()}`,
+      projectId,
+      objective: `Deconstruct user request: "${prompt}". Formulate delegation tasks across specialists and identify potential creative debate areas.`,
+      actionRequired: 'create',
+      scopeRequired: 'project:brief',
+      responseFormat: 'json',
+    });
 
-Analyze the user's project request. Break it down into clear, sequential subtasks for the relevant agents.
-Identify potential design friction or creative debate areas.
-Return your response structured in clean JSON with:
-{
-  "summary": "Brief executive summary of how you will direct the team",
-  "delegatedTasks": [
-    { "agentId": "samsmith", "taskTitle": "...", "description": "...", "priority": "high" },
-    { "agentId": "samkindle", "taskTitle": "...", "description": "...", "priority": "high" },
-    { "agentId": "samsonite", "taskTitle": "...", "description": "...", "priority": "high" },
-    { "agentId": "sammy", "taskTitle": "...", "description": "...", "priority": "medium" },
-    { "agentId": "samuel", "taskTitle": "...", "description": "...", "priority": "critical" }
-  ],
-  "anticipatedDebate": "Specific technical or aesthetic disagreement that Samuel or Samsonite may raise to ensure perfection",
-  "executiveMessage": "Conversational reply from Sammypopi directly addressing the user"
-}`;
-
-    if (aiClient) {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `Project Context: ${JSON.stringify(context || {})}\n\nUser Request: ${prompt}`,
-        config: {
-          systemInstruction: maestroSystemPrompt,
-          responseMimeType: 'application/json',
-          temperature: 0.4,
-        },
-      });
-
-      const responseText = response.text || '{}';
-      try {
-        const parsed = JSON.parse(responseText);
-        return res.json({
-          source: 'gemini-3.8-flash',
-          orchestration: parsed,
-        });
-      } catch (err) {
-        return res.json({
-          source: 'gemini-3.8-flash-raw',
-          orchestration: {
-            executiveMessage: responseText,
-            delegatedTasks: [],
-            anticipatedDebate: 'Independent review pending.',
-          },
-        });
-      }
-    }
-
-    // High-quality structured fallback if GEMINI_API_KEY is not configured yet
-    const fallbackResponse = {
-      source: 'local-orchestration-engine',
-      orchestration: {
-        summary: `Sammypopi has parsed the brief: "${prompt.slice(0, 80)}...". Coordinating specialists across competitive teardown, asset curation, wireframing, typographic calibration, and quality audit.`,
-        delegatedTasks: [
-          {
-            agentId: 'samsmith',
-            taskTitle: 'Benchmark UX & Contemporary Interaction Patterns',
-            description: `Audit sector benchmarks and UX conversion mechanisms related to: ${prompt}`,
-            priority: 'high',
-          },
-          {
-            agentId: 'samkindle',
-            taskTitle: 'Curate 60-30-10 Palette & Travertine/Basalt Assets',
-            description: 'Establish photographic direction, material tokens, and lighting rules.',
-            priority: 'high',
-          },
-          {
-            agentId: 'samsonite',
-            taskTitle: 'Draft Single-Elevation 1440px Wireframe Blueprint',
-            description: 'Structure Hero, Bento Grid, and Conversion triggers without card nesting.',
-            priority: 'high',
-          },
-          {
-            agentId: 'sammy',
-            taskTitle: 'Calibrate 2+1 Font Pairing & Tabular Figures',
-            description: 'Enforce text-wrap balance, measure (65-75ch), and font pairing harmony.',
-            priority: 'medium',
-          },
-          {
-            agentId: 'samuel',
-            taskTitle: 'Perform Anti-Slop Audit & WCAG AA Contrast Inspection',
-            description: 'Strictly inspect for banned pill badges, headline orphans, and contrast delta.',
-            priority: 'critical',
-          },
-        ],
-        anticipatedDebate: 'Samuel is scheduled to scrutinize Samsonite’s spatial padding and demand clean unboxed metadata over decorative capsules.',
-        executiveMessage: `I have received your brief and aligned the atelier. Samsmith is initiating market analysis, Samkindle is curating visual assets, and Samsonite will begin architectural wireframing. Samuel will run rigorous quality control before I present the final deliverable.`,
+    return res.json({
+      source: `${maestroTask.provider}/${maestroTask.model}`,
+      orchestration: maestroTask.structuredOutput || {
+        summary: maestroTask.resultText,
+        delegatedTasks: [],
+        executiveMessage: maestroTask.resultText,
       },
-    };
-
-    return res.json(fallbackResponse);
+    });
   } catch (error: any) {
     console.error('Orchestration error:', error);
     return res.status(500).json({ error: error.message || 'Orchestration failed' });
   }
 });
 
-// Dispatch task directly to a specific agent
+// Real full multi-agent workflow execution
+app.post('/api/runs', async (req: Request, res: Response) => {
+  try {
+    const { projectId = 'proj_apex_01', prompt } = req.body;
+
+    const summary = await orchestrationEngine.executeWorkflow({
+      projectId,
+      userPrompt: prompt,
+    });
+
+    return res.json(summary);
+  } catch (error: any) {
+    console.error('Workflow run error:', error);
+    return res.status(500).json({ error: error.message || 'Workflow run failed' });
+  }
+});
+
+// Cancel active run
+app.post('/api/runs/:runId/cancel', (req: Request, res: Response) => {
+  const { runId } = req.params;
+  orchestrationEngine.cancelRun(runId);
+  return res.json({ status: 'cancelled', runId });
+});
+
+// Dispatch task directly to a specific agent with permission checks
 app.post('/api/agents/:agentId/task', async (req: Request, res: Response) => {
   try {
     const { agentId } = req.params;
-    const { taskTitle, description, projectContext, systemInstruction } = req.body;
+    const { taskTitle, description, projectId = 'proj_apex_01', action = 'create', scope = 'project:drafts' } = req.body;
 
     if (!taskTitle) {
       return res.status(400).json({ error: 'taskTitle is required' });
     }
 
-    if (aiClient) {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `Task: ${taskTitle}\nDetails: ${description}\nProject Context: ${JSON.stringify(projectContext || {})}`,
-        config: {
-          systemInstruction: systemInstruction || `You are ${agentId}, a specialist agent in the Sammypopi workspace.`,
-          temperature: 0.3,
-        },
-      });
-
-      return res.json({
-        agentId,
-        status: 'completed',
-        result: response.text,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    return res.json({
+    const result = await agentRuntime.runAgentTask({
       agentId,
-      status: 'completed',
-      result: `[${agentId.toUpperCase()} SPECIFICATION]: Task "${taskTitle}" executed adhering to workspace standards. Output integrated into project deliverables.`,
-      timestamp: new Date().toISOString(),
+      taskId: `task_${Date.now()}`,
+      projectId,
+      objective: `${taskTitle}: ${description || ''}`,
+      actionRequired: action,
+      scopeRequired: scope,
     });
+
+    return res.json(result);
   } catch (error: any) {
     console.error('Agent task error:', error);
     return res.status(500).json({ error: error.message || 'Agent task execution failed' });
   }
 });
 
-// Setup Vite middleware in dev or static files in production
+// Get current project state
+app.get('/api/projects/:projectId', (req: Request, res: Response) => {
+  const { projectId } = req.params;
+  const project = projectState.getProject(projectId);
+  res.json(project);
+});
+
+// Get all memories
+app.get('/api/memories', (req: Request, res: Response) => {
+  res.json(memoryService.getAll());
+});
+
+// Add new memory
+app.post('/api/memories', (req: Request, res: Response) => {
+  const { title, content, category, importance = 'high', tags = [] } = req.body;
+  if (!title || !content || !category) {
+    return res.status(400).json({ error: 'title, content, and category are required' });
+  }
+  const saved = memoryService.add({ title, content, category, importance, tags });
+  res.json(saved);
+});
+
+// Start server
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -204,7 +146,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
+    // In production, when running from dist/server.js, static files are in the same folder (__dirname)
+    // When running from root (e.g. tsx server.ts with NODE_ENV=production), static files are in path.join(__dirname, 'dist')
+    const distPath = __dirname.endsWith('dist') ? __dirname : path.join(__dirname, 'dist');
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -212,7 +156,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Sammypopi Server] Running on http://0.0.0.0:${PORT}`);
+    console.log(`[Sammypopi Server] Multi-Provider AI Runtime active on http://0.0.0.0:${PORT}`);
   });
 }
 

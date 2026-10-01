@@ -1,6 +1,6 @@
-import { Agent, ToolDefinition } from '../types/orchestration';
+import { Agent, ToolDefinition, PermissionAction, PermissionScope } from '../types/orchestration';
+import { ModelPolicy } from './providers/providerTypes';
 
-// Avatars generated via generate_image in Phase 1
 export const AGENT_AVATARS = {
   sammypopi: '/src/assets/images/avatar_sammypopi_1790783942547.jpg',
   samkindle: '/src/assets/images/avatar_samkindle_1790783953516.jpg',
@@ -100,10 +100,22 @@ export const INITIAL_AGENTS: Agent[] = [
     role: 'Maestro & Executive Orchestrator',
     tagline: 'Leader of the workspace. Decomposes requests, delegates tasks, resolves conflicts, and synthesizes final deliverables.',
     avatar: AGENT_AVATARS.sammypopi,
-    color: '#D97706', // Warm Amber
+    color: '#D97706',
     accentBg: 'rgba(217, 119, 6, 0.1)',
     status: 'idle',
     isMaestro: true,
+    modelPolicy: {
+      primary: {
+        provider: 'openai',
+        model: process.env.OPENAI_MAESTRO_MODEL || 'gpt-4o',
+      },
+      fallback: [
+        { provider: 'anthropic', model: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022' },
+        { provider: 'gemini', model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3.8-flash' },
+      ],
+      requiredCapabilities: ['text', 'structured_output', 'reasoning'],
+      timeoutMs: 40000,
+    },
     systemInstruction: `You are Sammypopi (the Maestro), the chief orchestrator and executive leader of the Sammypopi multi-agent AI workspace.
 Your mandate is to lead a high-performing creative team composed of specialized agents: Samsmith (Research), Samkindle (Visual Assets), Samsonite (Landing Page Design), Sammy (Typography & Polish), and Samuel (Quality Control & Critic).
 You do not try to do all the work alone; you are a master conductor. You understand user briefs, break complex projects into strategic tasks, assign them to the right specialists, evaluate their findings, mediate creative disagreements, and synthesize a cohesive, peerless finished product.
@@ -144,9 +156,21 @@ Maintain an executive, authoritative, yet collaborative and inspiring tone. Prot
     role: 'Research & UX Intelligence Specialist',
     tagline: 'Researches landing-page, portfolio, UI/UX, layout, and visual trends using web intelligence.',
     avatar: AGENT_AVATARS.samsmith,
-    color: '#0284C7', // Sky Blue
+    color: '#0284C7',
     accentBg: 'rgba(2, 132, 199, 0.1)',
     status: 'idle',
+    modelPolicy: {
+      primary: {
+        provider: 'gemini',
+        model: process.env.GEMINI_RESEARCH_MODEL || 'gemini-3.8-flash',
+      },
+      fallback: [
+        { provider: 'openai', model: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o-mini' },
+        { provider: 'anthropic', model: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022' },
+      ],
+      requiredCapabilities: ['text', 'reasoning', 'tool_calling'],
+      timeoutMs: 35000,
+    },
     systemInstruction: `You are Samsmith, the Research and Intelligence Specialist in the Sammypopi team.
 You rigorously research contemporary landing page benchmarks, UX conversion patterns, competitive positioning, and layout trends.
 You never rely on speculation; you look for verifiable mechanisms and market realities. You identify what modern top-tier portfolios and tech leaders are doing right now and provide Samsonite and Sammypopi with concrete, actionable recommendations.`,
@@ -184,9 +208,21 @@ You never rely on speculation; you look for verifiable mechanisms and market rea
     role: 'Visual Research & Image Asset Specialist',
     tagline: 'Finds, evaluates, generates, and curates visual assets, textures, and color systems.',
     avatar: AGENT_AVATARS.samkindle,
-    color: '#8B5CF6', // Purple/Violet
+    color: '#8B5CF6',
     accentBg: 'rgba(139, 92, 246, 0.1)',
     status: 'idle',
+    modelPolicy: {
+      primary: {
+        provider: 'gemini',
+        model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3.8-flash',
+      },
+      fallback: [
+        { provider: 'openai', model: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o' },
+        { provider: 'anthropic', model: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022' },
+      ],
+      requiredCapabilities: ['text', 'vision', 'structured_output'],
+      timeoutMs: 35000,
+    },
     systemInstruction: `You are Samkindle, the Visual Research and Asset Specialist.
 You curate imagery, photography, travertine and slate material textures, and high-fidelity visual assets.
 You strictly enforce anti-slop visual discipline: NO glossy floating 3D spheres, NO oversaturated neon cyberpunk glows, NO airbrushed plastic figures, and NO unverified external URLs. Every visual asset must have a purpose, proper aspect ratio, and authentic mood.`,
@@ -223,9 +259,21 @@ You strictly enforce anti-slop visual discipline: NO glossy floating 3D spheres,
     role: 'Landing-Page & Portfolio Designer',
     tagline: 'Transforms research, content, and visual direction into wireframes, layouts, and page architecture.',
     avatar: AGENT_AVATARS.samsonite,
-    color: '#10B981', // Emerald
+    color: '#10B981',
     accentBg: 'rgba(16, 185, 129, 0.1)',
     status: 'idle',
+    modelPolicy: {
+      primary: {
+        provider: 'anthropic',
+        model: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022',
+      },
+      fallback: [
+        { provider: 'openai', model: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o' },
+        { provider: 'gemini', model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3.8-flash' },
+      ],
+      requiredCapabilities: ['text', 'structured_output', 'reasoning'],
+      timeoutMs: 45000,
+    },
     systemInstruction: `You are Samsonite, the Landing Page and Portfolio Designer in the Sammypopi workspace.
 You translate the user brief, Samsmith’s research, and Samkindle’s visual assets into cohesive page architecture.
 You build wireframes, define sections (Hero, Bento Grid, Proof/Case Studies, Capabilities, CTA), ensure responsive spatial math, and create clean, single-elevation layouts that breathe with whitespace.`,
@@ -263,9 +311,21 @@ You build wireframes, define sections (Hero, Bento Grid, Proof/Case Studies, Cap
     role: 'Typography & Visual-Polish Specialist',
     tagline: 'Focuses on font pairing, hierarchy, optical compensation, line length, and micro-spacing rhythm.',
     avatar: AGENT_AVATARS.sammy,
-    color: '#EC4899', // Pink / Rose
+    color: '#EC4899',
     accentBg: 'rgba(236, 72, 153, 0.1)',
     status: 'idle',
+    modelPolicy: {
+      primary: {
+        provider: 'openai',
+        model: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o',
+      },
+      fallback: [
+        { provider: 'anthropic', model: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022' },
+        { provider: 'gemini', model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3.8-flash' },
+      ],
+      requiredCapabilities: ['text', 'structured_output'],
+      timeoutMs: 30000,
+    },
     systemInstruction: `You are Sammy, the Typography and Visual-Polish Specialist.
 You obsess over font pairings, optical compensation, measure (line length between 65-75ch), line height, letter spacing, tabular numerals on numbers/dates, and the elimination of orphan words.
 You enforce the 2+1 font rule: at most one expressive display face, one ultra-legible body face, and an optional tabular monospace font for metrics.`,
@@ -302,9 +362,21 @@ You enforce the 2+1 font rule: at most one expressive display face, one ultra-le
     role: 'Quality Control, Critic & Improvement Specialist',
     tagline: 'Reviews completed work, identifies errors, inconsistencies, weaknesses, and issues revision requests.',
     avatar: AGENT_AVATARS.samuel,
-    color: '#EF4444', // Crimson / Red
+    color: '#EF4444',
     accentBg: 'rgba(239, 68, 68, 0.1)',
     status: 'idle',
+    modelPolicy: {
+      primary: {
+        provider: 'anthropic',
+        model: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022',
+      },
+      fallback: [
+        { provider: 'openai', model: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o' },
+        { provider: 'gemini', model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3.8-flash' },
+      ],
+      requiredCapabilities: ['text', 'structured_output', 'reasoning'],
+      timeoutMs: 40000,
+    },
     systemInstruction: `You are Samuel, the Chief Critic and Quality Control Specialist in the Sammypopi workspace.
 You are the guardian of excellence. You NEVER automatically rubber-stamp work. You systematically audit every proposal and deliverable against strict standards:
 1. Anti-Slop violations (did someone insert rounded pill badges? fake scores like 92/100? // comment headers?).
@@ -375,11 +447,23 @@ class AgentRegistryService {
     }
   }
 
+  public updateAgentModelInfo(id: string, provider: Agent['activeProvider'], model?: string): void {
+    const agent = this.agents.get(id);
+    if (agent) {
+      agent.activeProvider = provider;
+      if (model) agent.activeModel = model;
+    }
+  }
+
   public registerCustomAgent(newAgent: Omit<Agent, 'completedTasksCount' | 'status'>): Agent {
     const created: Agent = {
       ...newAgent,
       status: 'idle',
       completedTasksCount: 0,
+      modelPolicy: newAgent.modelPolicy || {
+        primary: { provider: 'openai', model: 'gpt-4o' },
+        fallback: [{ provider: 'gemini', model: 'gemini-3.8-flash' }],
+      },
     };
     this.agents.set(created.id, created);
     return created;
@@ -393,11 +477,11 @@ class AgentRegistryService {
     return this.tools.get(id);
   }
 
-  public hasPermission(agentId: string, action: keyof Agent['permissions'], scope: string): boolean {
+  public hasPermission(agentId: string, action: PermissionAction, scope: PermissionScope): boolean {
     const agent = this.agents.get(agentId);
     if (!agent) return false;
     const permissions = agent.permissions[action];
-    return permissions.includes(scope as any);
+    return permissions.includes(scope);
   }
 }
 
